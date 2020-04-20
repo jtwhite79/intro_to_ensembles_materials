@@ -251,9 +251,11 @@ def set_truth():
 	oen = pyemu.ObservationEnsemble.from_csv(pst=pst, filename=os.path.join("master_prior", "pest_prior.0.obs.csv"))
 	phi = oen.phi_vector
 	phi.sort_values(inplace=True)
-	idx = phi.index[-100]
+	idx = phi.index[-int(phi.shape[0]/10)]
 	pst.observation_data.loc[:,"obsval"] = oen.loc[idx,pst.obs_names]
 	pst.write(os.path.join(t_d,"pest.pst"))
+	pst.parameter_data.loc[:,"parval1"] = pen.loc[idx,pst.par_names]
+	pst.write(os.path.join(t_d,"truth.pst"))
 
 
 def run_ies(num_reals,noptmax):
@@ -271,19 +273,52 @@ def run_ies(num_reals,noptmax):
 
 def plot_ies_result(m_d):
 
+	phi = pd.read_csv(os.path.join(m_d,"pest_ies.phi.actual.csv"),index_col=0)
+	fig,ax = plt.subplots(1,1,figsize=(6,6))
+	ax.plot(phi.index,phi.loc[:,"mean"],"b",lw=1.5)
+	[ax.plot(phi.index,phi.loc[:,r],'b',lw=0.25) for r in phi.columns[6:]]
+	ax.set_xlabel("iteration")
+	ax.set_ylabel("phi")
+	ax.set_xticks(phi.index.values)
+	plt.savefig(m_d+"_phi.pdf")
 
+	tpst = pyemu.Pst(os.path.join(m_d,"truth.pst"))
 	pst = pyemu.Pst(os.path.join(m_d,"pest_ies.pst"))
+	pe_pr = pd.read_csv(os.path.join(m_d, "pest_ies.0.par.csv"), index_col=0)
+	pe_pt = pd.read_csv(os.path.join(m_d, "pest_ies.{0}.par.csv".format(pst.control_data.noptmax)), index_col=0)
+	with PdfPages(m_d+"_par.pdf") as pdf:
+		for p in pst.par_names:
+			fig,ax = plt.subplots(1,1,figsize=(6,6))
+			pe_pr.loc[:,p].hist(ax=ax,facecolor="0.5",edgecolor="none",density=True,alpha=0.5)
+			pe_pt.loc[:, p].hist(ax=ax, facecolor="b", edgecolor="none", density=True,alpha=0.5)
+			ylim = ax.get_ylim()
+			v = tpst.parameter_data.loc[p,"parval1"]
+			ax.plot([v,v],ylim,"r")
+			ax.set_title(p,loc="left")
+			ax.set_xlabel("parameter value")
+			ax.set_yticks([])
+			ax.set_ylabel("increasing probability density")
+			ax.grid(False)
+			pdf.savefig()
+			plt.close(fig)
+
 	obs = pst.nnz_obs_names
 	obs.extend([o for o in pst.obs_names if "_08" in o])
-	oe = pd.read_csv(os.path.join(m_d,"pest_ies.{0}.obs.csv".format(pst.control_data.noptmax)),index_col=0)
+	oe_pr = pd.read_csv(os.path.join(m_d, "pest_ies.0.obs.csv"), index_col=0)
+	oe_pt = pd.read_csv(os.path.join(m_d,"pest_ies.{0}.obs.csv".format(pst.control_data.noptmax)),index_col=0)
 	fig,axes = plt.subplots(1,len(obs),figsize=(10,4))
 	for o,ax in zip(obs,axes):
 		ax.set_title(o,loc="left")
-		oe.loc[:,o].hist(ax=ax)
+		oe_pr.loc[:, o].hist(ax=ax,facecolor="0.5",alpha=0.5,edgecolor="none",density=True)
+		oe_pt.loc[:, o].hist(ax=ax, facecolor="b", alpha=0.5, edgecolor="none", density=True)
 		v = pst.observation_data.loc[o,"obsval"]
 		ax.plot([v,v],ax.get_ylim(),"r")
-	plt.show()
-
+		ax.set_xlabel("output value")
+		ax.grid(False)
+		ax.set_yticks([])
+		ax.set_ylabel("increasing probability density")
+	plt.savefig(m_d+"_obs.pdf")
+	plt.close(fig)
 
 if __name__ == "__main__":
 	#plot_domain()
@@ -292,6 +327,6 @@ if __name__ == "__main__":
 	#jco_vs_en()
 	#example_jco_vs_en()
 	#set_truth()
-	m_d = run_ies(4,7)
+	m_d = run_ies(15,7)
 	plot_ies_result(m_d)
 
