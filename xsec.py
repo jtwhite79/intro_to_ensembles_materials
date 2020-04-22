@@ -381,18 +381,67 @@ def plot_ies_result(m_d):
 	plt.savefig(m_d+"_obs.pdf")
 	plt.close(fig)
 
+def cc_hist(num_reals,drop_bound=True):
+	pst = pyemu.Pst(os.path.join(t_d, "pest.pst"))
+	jco = pyemu.Jco.from_binary(os.path.join("master_jcb", "pest.jcb")).to_dataframe()
+	# pen = pyemu.ParameterEnsemble.from_csv(pst=pst,filename=os.path.join("master_prior","pest_prior.0.par.csv"))
+	# oen = pyemu.ParameterEnsemble.from_csv(pst=pst, filename=os.path.join("master_prior", "pest_prior.0.obs.csv"))
+	pen = pd.read_csv(os.path.join("master_prior", "pest_prior.0.par.csv"), index_col=0)
+	oen = pd.read_csv(os.path.join("master_prior", "pest_prior.0.obs.csv"), index_col=0)
+
+	names,slopes,ccs = [],[],[]
+	for pname in pst.par_names:
+		for oname in pst.nnz_obs_names:
+			ub = pst.parameter_data.loc[pname, "parubnd"]
+			lb = pst.parameter_data.loc[pname, "parlbnd"]
+			pv = pen.loc[:, pname]
+			if drop_bound:
+				pv[pv >= ub] = np.NaN
+				pv[pv <= lb] = np.NaN
+				pv = pv.dropna()
+			pv = pv.apply(np.log10)
+			ov = oen.loc[pv.index, oname]
+			slope = jco.loc[oname, pname]
+			cccs = []
+			for ii, i in enumerate(range(0, pv.shape[0], num_reals)):
+
+				pvv = pv.iloc[i:i + num_reals]
+				ovv = ov.iloc[i:i + num_reals]
+
+				df = pd.DataFrame({"pv": pvv, "ov": ovv})
+				cc = df.corr().iloc[1, 0]
+				cc *= ovv.std()
+				cc /= pvv.std()
+				cccs.append(cc)
+				print(ii, i, i + num_reals,cc)
+			names.append("{0}, {1}".format(pname,oname))
+			slopes.append(slope)
+			ccs.append(cccs)
+	print(len(names))
+	fig,axes = plt.subplots(5,6,figsize=(10,10))
+	for name,slope,ccs,ax in zip(names,slopes,ccs,axes.flatten()):
+		ax.hist(ccs,alpha=0.5)
+		ylim = ax.get_ylim()
+		ax.plot([slope,slope],ylim,'r')
+		ax.set_title(name)
+		ax.set_yticks([])
+	plt.tight_layout()
+	plt.savefig("cc_hist_{0}.pdf".format(num_reals))
+	plt.close(fig)
+
+
+
+
 if __name__ == "__main__":
-    # introduce yourself
-    print "Zak was here"
-    #
+
 	#plot_domain()
 	#run_prior_sweep()
 	#run_jco()
 	#jco_vs_en(1000,drop_bound=True)
-	jco_vs_en_single(num_reals=100)
+	#jco_vs_en_single(num_reals=10)
+	cc_hist(50)
 	#example_jco_vs_en()
 	#set_truth()
 	#m_d = run_ies(10,3)
 	#plot_ies_result(m_d)
-	print("jeremy")
-    print "I'm down here now"
+
