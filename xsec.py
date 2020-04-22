@@ -136,7 +136,7 @@ def run_jco():
 	pyemu.os_utils.start_workers(t_d,"pestpp-glm","pest.pst",num_workers=1,master_dir="master_jcb")
 
 
-def jco_vs_en(num_reals=1000):
+def jco_vs_en(num_reals=1000,drop_bound=True):
 	pst = pyemu.Pst(os.path.join(t_d,"pest.pst"))
 	jco = pyemu.Jco.from_binary(os.path.join("master_jcb","pest.jcb")).to_dataframe()
 	# pen = pyemu.ParameterEnsemble.from_csv(pst=pst,filename=os.path.join("master_prior","pest_prior.0.par.csv"))
@@ -144,7 +144,7 @@ def jco_vs_en(num_reals=1000):
 	pen = pd.read_csv(os.path.join("master_prior", "pest_prior.0.par.csv"),index_col=0)
 	oen = pd.read_csv(os.path.join("master_prior", "pest_prior.0.obs.csv"),index_col=0)
 	obs = pst.nnz_obs_names
-	obs.extend([o for o in pst.obs_names if "_08" in o])
+	#obs.extend([o for o in pst.obs_names if "_08" in o])
 	print(obs)
 	print(pen.shape)
 	with PdfPages("jco_vs_en.pdf") as pdf:
@@ -157,9 +157,10 @@ def jco_vs_en(num_reals=1000):
 				ub = pst.parameter_data.loc[par,"parubnd"]
 				lb = pst.parameter_data.loc[par, "parlbnd"]
 
-				pv[pv>=ub] = np.NaN
-				pv[pv <= lb] = np.NaN
-				pv = pv.dropna()
+				if drop_bound:
+					pv[pv>=ub] = np.NaN
+					pv[pv <= lb] = np.NaN
+					pv = pv.dropna()
 				pv = pv.apply(np.log10)
 				ov = oen.loc[pv.index,o]
 				pv = pv.iloc[:num_reals]
@@ -185,6 +186,66 @@ def jco_vs_en(num_reals=1000):
 			plt.tight_layout()
 			pdf.savefig()
 			plt.close(fig)
+
+
+def jco_vs_en_single(num_reals=1000,drop_bound=True):
+	pst = pyemu.Pst(os.path.join(t_d,"pest.pst"))
+	jco = pyemu.Jco.from_binary(os.path.join("master_jcb","pest.jcb")).to_dataframe()
+	# pen = pyemu.ParameterEnsemble.from_csv(pst=pst,filename=os.path.join("master_prior","pest_prior.0.par.csv"))
+	# oen = pyemu.ParameterEnsemble.from_csv(pst=pst, filename=os.path.join("master_prior", "pest_prior.0.obs.csv"))
+	pen = pd.read_csv(os.path.join("master_prior", "pest_prior.0.par.csv"),index_col=0)
+	oen = pd.read_csv(os.path.join("master_prior", "pest_prior.0.obs.csv"),index_col=0)
+
+
+	with PdfPages("jco_vs_en_single_{0}.pdf".format(num_reals)) as pdf:
+		for pname in pst.par_names:
+			for oname in pst.nnz_obs_names:
+				ub = pst.parameter_data.loc[pname, "parubnd"]
+				lb = pst.parameter_data.loc[pname, "parlbnd"]
+				pv = pen.loc[:,pname]
+				if drop_bound:
+					pv[pv >= ub] = np.NaN
+					pv[pv <= lb] = np.NaN
+					pv = pv.dropna()
+				pv = pv.apply(np.log10)
+				ov = oen.loc[pv.index,oname]
+				slope = jco.loc[oname, pname]
+				fig, axes = plt.subplots(2,2, figsize=(6,6))
+				axes = axes.flatten()
+				for ii,i in enumerate(range(0,pv.shape[0],num_reals)):
+					if ii >= len(axes):
+						break
+					print(ii,i,i+num_reals)
+					ax = axes[ii]
+					pvv = pv.iloc[i:i+num_reals]
+					ovv = ov.iloc[i:i+num_reals]
+					#print(pvv.shape,ovv.shape)
+					ax.scatter(pvv,ovv,marker='.',s=1,color="0.5")
+					df = pd.DataFrame({"pv": pvv, "ov": ovv})
+					cc = df.corr().iloc[1, 0]
+					cc *= ovv.std()
+					cc /= pvv.std()
+					xlim,ylim = ax.get_xlim(),ax.get_ylim()
+					m,b = np.polyfit(pvv,ovv,1)
+					x = np.linspace(xlim[0],xlim[1],100)
+					ax.plot(x,b + (x*slope),"r",lw=2.0,label="jacobian")
+					ax.plot(x,b + (x*cc),"k",lw=2.0,dashes=(1,1),label="ensemble")
+
+
+					#print(b, m,cc)
+					#print(cc)
+					ax.set_title("par:{0}, obs:{1}\nsen:{2:4.2E} vs CC:{3:4.2E}".format(pname,oname,slope,cc))
+					ax.set_xlabel("parameter value")
+					ax.set_ylabel("observation value")
+					ax.legend(loc="upper left")
+					#ax.set_xticks([])
+					#ax.set_yticks([])
+					#ax.legend("{0} {1}".format(pname,oname),loc="left")
+				#fig.suptitle("par: {0}, obs: {1}".format(pname,oname))
+				plt.tight_layout()
+				#plt.show()
+				pdf.savefig()
+				plt.close(fig)
 
 
 
@@ -324,9 +385,10 @@ if __name__ == "__main__":
 	#plot_domain()
 	#run_prior_sweep()
 	#run_jco()
-	#jco_vs_en()
+	#jco_vs_en(1000,drop_bound=True)
+	jco_vs_en_single(num_reals=100)
 	#example_jco_vs_en()
 	#set_truth()
-	m_d = run_ies(15,7)
-	plot_ies_result(m_d)
+	#m_d = run_ies(10,3)
+	#plot_ies_result(m_d)
 
