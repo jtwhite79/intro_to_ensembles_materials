@@ -382,6 +382,9 @@ def plot_ies_result(m_d):
 	plt.close(fig)
 
 if __name__ == "__main__":
+    # introduce yourself
+    print "Zak was here"
+    #
 	#plot_domain()
 	#run_prior_sweep()
 	#run_jco()
