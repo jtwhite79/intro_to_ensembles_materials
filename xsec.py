@@ -9,6 +9,17 @@ import pyemu
 
 t_d = "template"
 nam_file = "xsec.nam"
+
+par_name_dict = {"cond":"GHB conductance","wel_1":"historic inflow",
+				 "wel_2":"future inflow","stage_1":"historic GHB stage",
+				 "stage_2":"future GHB stage"}
+for i in range(10):
+	par_name_dict["k_{0:02d}".format(i+1)] = "cell {0} HK".format(i+1)
+
+def obs_namer(oname):
+	cell = int(oname.split('_')[1])
+	return "model cell {0} gw level".format(cell)
+
 def plot_domain():
 	pyemu.os_utils.run("mfnwt {0}".format(nam_file),cwd=t_d)
 	m = flopy.modflow.Modflow.load(nam_file,model_ws=t_d,check=False)
@@ -414,7 +425,7 @@ def cc_hist(num_reals,drop_bound=True):
 				cc /= pvv.std()
 				cccs.append(cc)
 				print(ii, i, i + num_reals,cc)
-			names.append("{0}, {1}".format(pname,oname))
+			names.append("par:{0}\nobs:{1}".format(par_name_dict[pname],obs_namer(oname)))
 			slopes.append(slope)
 			ccs.append(cccs)
 	print(len(names))
